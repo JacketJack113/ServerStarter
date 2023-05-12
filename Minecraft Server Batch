@@ -1,0 +1,83 @@
+::Batch file modified by N0tHumqn (JacketJack113), on 23/3/2023-24/3/2023
+::Server.bat that is capable to do the following:
+:: -Startup a Minecraft Server
+:: -Backup the world folder using WinRAR automatically after the server shutted down
+:: -Read the configuration file (.\config\BatchSetup.txt)
+:: -Schedule a shutdown based on the information provided inside the configuration file
+:: -Ability to cancel the shutdown schedule if the user pressed the enter after "Shutdown Scheduled" popped-up
+
+@echo off
+java -Xmx4G -jar Fabric_Server.jar nogui
+
+REM set configuration file default location, create one if it doesn't exist, configuration file located inside .\config\
+if not exist .\config\BatchSetup.txt (
+	@echo ShuTimeL=060000
+	@echo ShuTimeX=220000
+	@echo ShutCanc=180
+	@echo DfutBackup=true
+)>".\config\BatchSetup.txt"
+
+REM Set predefined file location
+set "file=.\config\BatchSetup.txt"
+set /A i=0
+
+REM Procedure to read files inside BatchSetup.txt
+for /F "usebackq delims=" %%a in ("%file%") do (
+	set /A i+=1
+	call set temp=%%a
+	call set temp=%%temp:~11,20%%
+	call set array[%%i%%]=%%temp%%
+	call set n=%%i%%
+)
+
+REM After shutting down the server, the system will backup world save file using WinRAR with current date and time as file name, make directory if \Backup doesn't exist
+echo:
+set CUR_YYYY=%date:~6,4%
+set CUR_MM=%date:~3,2%
+set CUR_DD=%date:~0,2%
+set CUR_HH=%time:~0,2%
+if %CUR_HH% lss 10 (set CUR_HH=0%time:~1,1%)
+set CUR_NN=%time:~3,2%
+set CUR_SS=%time:~6,2%
+set CUR_TIME=%CUR_HH%%CUR_NN%%CUR_SS%
+set CUR_DATE=%CUR_YYYY%%CUR_MM%%CUR_DD%
+
+set SUBFILENAME=%CUR_DATE%-%CUR_TIME%
+if not exist .\Backup (
+	mkdir .\Backup
+)
+
+if %array[2]% EQU true (
+echo Server backing up, please wait for a moment...
+"c:\Program Files\WinRAR\WinRAR.exe" a -afzip ".\Backup\%SUBFILENAME%.zip" ".\world"
+echo done.
+)
+
+REM Schedule of Shutting down the PC, if the current time matches the predefined default shutdown time (e.g. within 10pm to 6am) in the text config file, activate auto shutdown
+set boolean=false
+echo:
+REM Case EQU 000000: force the value 235959 if the config contains 000000 (next day)
+if %array[2]% EQU 000000 set array[2]=235959
+if %CUR_TIME% LEQ %array[1]% set boolean=true
+if %CUR_TIME% GEQ %array[2]% set boolean=true
+REM echo %CUR_TIME%
+
+REM generate the value of minute based on the conversion from second to minute
+set /a minutes=%array[3]%
+set /a T_Min=%minutes% %% 60
+set /a minutes=%minutes%-%T_Min%
+set /a minutes=%minutes%/60
+if not %T_Min% == 0 (
+	set /a minutes+=1
+)
+
+if %boolean% == true (
+	shutdown /s /t %array[3]% /f /c "The PC will shutdown in %minutes% minute(s) / %array[3]% seconds" /hybrid
+	echo Shutdown scheduled in %minutes% Minutes!
+	set /p DUMMY=Hit Enter in the this batch execution to cancel the shutdown schedule...
+	shutdown /a
+	set /p DUMMY=Shutdown cancelled, press any key to continue...
+	goto LabelA
+) else (
+	set /p DUMMY=Server execution finished. Press any key to continue...
+)
